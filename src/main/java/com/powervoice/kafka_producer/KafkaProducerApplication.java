@@ -1,4 +1,4 @@
-package com.powervoice.sv.ssg.kafka_producer;
+package com.powervoice.kafka_producer;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
