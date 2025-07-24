@@ -11,7 +11,7 @@ public class MultiTopicProducer {
     private final KafkaTemplate<String, String> kafkaTemplate;
 
     public void sendReqdata(String message) {
-        kafkaTemplate.send("Reqdata", message);
+        kafkaTemplate.send("reqdata", message);
     }
 
 

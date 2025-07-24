@@ -67,35 +67,36 @@ public class KafkaController {
 
     // 누락 데이터 체크 메소드
     private Optional<String> validateBatch(BatchRequestDTO b) {
-        if (b.getCALL_ARR() == null) {
-            return Optional.of("CALL_ARR is required");
+        if (b.getCALL_ARR() == null || b.getCALL_ARR().isEmpty()) {
+            return Optional.of("[KafkaController.validateBatch] CALL_ARR must not be empty");
         }
         if (b.getTOTAL() != b.getCALL_ARR().size()) {
-            return Optional.of("TOTAL and CALL_ARR size mismatch");
+            return Optional.of("[KafkaController.validateBatch] TOTAL and CALL_ARR size mismatch");
         }
         return Optional.empty();
     }
 
+
     // 누락 데이터 체크 메소드
     private Optional<String> validateSingle(CallDataDTO c) {
         if (c.getCallId() == null || c.getCallId().isEmpty()) {
-            return Optional.of("CALL_ID is required");
+            return Optional.of("[KafkaController.validateSingle] CALL_ID is required");
         }
         if (c.getFilePath() == null || c.getFilePath().isEmpty()) {
-            return Optional.of("FILE_PATH is required");
+            return Optional.of("[KafkaController.validateSingle] FILE_PATH is required");
         }
         return Optional.empty();
     }
 
     // 성공 응답 메소드
     private ResponseEntity<Map<String,Object>> ok(int queued) {
-        log.info("[KafkaController.process] : SUCCESS queued {}", queued);
+        log.info("[KafkaController.ResponseEntity] : SUCCESS queued {}", queued);
         return ResponseEntity.ok(Map.of("status","SUCCESS", "queued", queued));
     }
 
     // 실패 응답 메소드
     private ResponseEntity<Map<String,Object>> bad(String msg) {
-        log.warn("[KafkaController.process] : FAIL {}", msg);
+        log.warn("[KafkaController.ResponseEntity] : FAIL {}", msg);
         return ResponseEntity.badRequest().body(Map.of("status","FAIL", "errorMsg", msg));
     }
 }
