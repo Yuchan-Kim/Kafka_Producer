@@ -10,19 +10,9 @@ public class MultiTopicProducer {
 
     private final KafkaTemplate<String, String> kafkaTemplate;
 
-    public void sendToCallTopic(String message) {
-        kafkaTemplate.send("topic-call", message);
+    public void sendReqdata(String message) {
+        kafkaTemplate.send("Reqdata", message);
     }
 
-    public void sendToMaskTopic(String message) {
-        kafkaTemplate.send("topic-mask", message);
-    }
 
-    public void sendToResultTopic(String message) {
-        kafkaTemplate.send("topic-result", message);
-    }
-
-    public void sendToNotifyTopic(String message) {
-        kafkaTemplate.send("topic-notify", message);
-    }
 }
