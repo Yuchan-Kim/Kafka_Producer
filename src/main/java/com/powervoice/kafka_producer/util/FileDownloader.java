@@ -22,9 +22,9 @@ public class FileDownloader {
     private static final String PASS = "skfodi$3312";
 
     public byte[] download(String remotePath) {
-
+        boolean switchToSFTP = false;
         try {
-            if (remotePath.contains("KafkaMount")) {
+            if (switchToSFTP) {
                 return downloadViaSFTP(remotePath);
             } else {
                 return downloadViaFTP(remotePath);
