@@ -37,10 +37,17 @@ public class FileDownloader {
 
     private byte[] downloadViaFTP(String path) throws IOException {
         FTPClient ftp = new FTPClient();
-        ftp.connect(HOST);
-        ftp.login(USER, PASS);
-        ftp.enterLocalPassiveMode();
-        ftp.setFileType(FTP.BINARY_FILE_TYPE);
+
+        //FTP 접속 실패 예외 처리 추가
+        try{
+            ftp.connect(HOST);
+            ftp.login(USER, PASS);
+            ftp.enterLocalPassiveMode();
+            ftp.setFileType(FTP.BINARY_FILE_TYPE);
+        }catch (IOException e){
+            log.error("[FTP ERROR] 연결 실패: {}", e.getMessage(), e);
+            throw new RuntimeException("FTP 연결 실패");
+        }
 
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
             boolean ok = ftp.retrieveFile(path, baos);
