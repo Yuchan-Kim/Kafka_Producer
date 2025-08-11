@@ -1,102 +1,103 @@
-// src/main/java/com/powervoice/kafka_producer/controller/KafkaController.java
 package com.powervoice.kafka_producer.controller;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.powervoice.kafka_producer.dto.BatchRequestDTO;
-import com.powervoice.kafka_producer.dto.CallDataDTO;
+import com.powervoice.kafka_producer.dto.BatchReq;
+import com.powervoice.kafka_producer.dto.CallItem;
 import com.powervoice.kafka_producer.queue.MessageQ;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 @RestController
 @RequestMapping("/reqdata")
 @RequiredArgsConstructor
 @Slf4j
 public class KafkaController {
-    private final ObjectMapper objectMapper;
+
+    private final ObjectMapper om;
     private final MessageQ messageQ;
+
+    @Value("${app.queue.offer-timeout-ms:200}")
+    private long offerTimeoutMs;
 
     @PostMapping
     public ResponseEntity<Map<String,Object>> process(@RequestBody JsonNode node) {
-        log.info("[KafkaController.process] : Received request: {}", node);
         try {
-            if (node.has("CALL_ARR") && node.get("CALL_ARR").isArray()) {
-                // 배치 처리
-                BatchRequestDTO batch = objectMapper.treeToValue(node, BatchRequestDTO.class);
+            BatchReq req = om.treeToValue(node, BatchReq.class);
+            String err = validate(req);
+            if (err != null) return bad(err);
 
-                Optional<String> err = validateBatch(batch);
-                if (err.isPresent()) {
-                    log.warn("[KafkaController.process] : Validation failed: {}", err.get());
-                    return bad(err.get());
-                }
-
-                log.info("[KafkaController.process] : Batch validated, queuing {} items", batch.getCALL_ARR().size());
-                batch.getCALL_ARR().forEach(messageQ::add);
-                log.info("[KafkaController.process] : Queued {} items", batch.getCALL_ARR().size());
-
-                return ok(batch.getCALL_ARR().size());
-
-            } else {
-                // 단일 처리
-                CallDataDTO single = objectMapper.treeToValue(node, CallDataDTO.class);
-
-                Optional<String> err = validateSingle(single);
-                if (err.isPresent()) {
-                    log.warn("[KafkaController.process] : Validation failed: {}", err.get());
-                    return bad(err.get());
-                }
-
-                log.info("[KafkaController.process] : Single validated, queuing callId={}", single.getCallId());
-                messageQ.add(single);
-                log.info("[KafkaController.process] : Queued callId={}", single.getCallId());
-
-                return ok(1);
+            int enq = 0;
+            for (CallItem item : req.getCallArr()) {
+                boolean ok = messageQ.offer(item, offerTimeoutMs);
+                if (!ok) return tooMany("QUEUE_FULL");
+                enq++;
             }
+            log.info("Enqueued {} items (queue size={}, remain={})",
+                    enq, messageQ.size(), messageQ.remainingCapacity());
+            return ok(enq);
+
         } catch (JsonProcessingException e) {
-            log.error("[KafkaController.process] : Invalid JSON: {}", e.getOriginalMessage());
+            log.error("Invalid JSON: {}", e.getOriginalMessage());
             return bad("Invalid JSON: " + e.getOriginalMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return bad("INTERRUPTED");
         }
     }
 
-    // 누락 데이터 체크 메소드
-    private Optional<String> validateBatch(BatchRequestDTO b) {
-        if (b.getCALL_ARR() == null || b.getCALL_ARR().isEmpty()) {
-            return Optional.of("[KafkaController.validateBatch] CALL_ARR must not be empty");
+    // ---- validators ----
+    private String validate(BatchReq r){
+        if (r.getCMD() == null || r.getCMD().isBlank())
+            return "CMD required";
+        if (!List.of("BATCH_PROC","SINGLE_PROC").contains(r.getCMD()))
+            return "CMD must be BATCH_PROC or SINGLE_PROC";
+
+        if (r.getTOTAL() == null || r.getTOTAL() < 1)
+            return "TOTAL required (>0)";
+        if (r.getCallArr() == null || r.getCallArr().isEmpty())
+            return "CALL_ARR required";
+        if (r.getTOTAL() != r.getCallArr().size())
+            return "TOTAL mismatch";
+
+        if ("SINGLE_PROC".equalsIgnoreCase(r.getCMD()) && r.getCallArr().size() != 1)
+            return "SINGLE_PROC must have exactly 1 item";
+
+        for (CallItem c : r.getCallArr()) {
+            String e = validateSingle(c);
+            if (e != null) return e;
         }
-        if (b.getTOTAL() != b.getCALL_ARR().size()) {
-            return Optional.of("[KafkaController.validateBatch] TOTAL and CALL_ARR size mismatch");
-        }
-        return Optional.empty();
+        return null;
     }
 
-
-    // 누락 데이터 체크 메소드
-    private Optional<String> validateSingle(CallDataDTO c) {
-        if (c.getCallId() == null || c.getCallId().isEmpty()) {
-            return Optional.of("[KafkaController.validateSingle] CALL_ID is required");
-        }
-        if (c.getFilePath() == null || c.getFilePath().isEmpty()) {
-            return Optional.of("[KafkaController.validateSingle] FILE_PATH is required");
-        }
-        return Optional.empty();
+    private String validateSingle(CallItem c){
+        if (empty(c.getCallId()))   return "CALL_ID required";
+        if (empty(c.getAni()))      return "ANI required";
+        if (empty(c.getCustmType()))return "CUSTM_TYPE required";
+        if (empty(c.getFilePath())) return "FILE_PATH required";
+        if (empty(c.getStartTime()))return "START_TIME required";
+        if (empty(c.getEndSec()))   return "END_SEC required";
+        if (empty(c.getDuration())) return "DURATION required";
+        if (empty(c.getReqTime()))  return "REQ_TIME required";
+        return null;
     }
+    private boolean empty(String s){ return s==null || s.isBlank(); }
 
-    // 성공 응답 메소드
+    // ---- responses ----
     private ResponseEntity<Map<String,Object>> ok(int queued) {
-        log.info("[KafkaController.ResponseEntity] : SUCCESS queued {}", queued);
-        return ResponseEntity.ok(Map.of("status","SUCCESS", "queued", queued));
+        return ResponseEntity.ok(Map.of("status","SUCCESS","queued",queued));
     }
-
-    // 실패 응답 메소드
     private ResponseEntity<Map<String,Object>> bad(String msg) {
-        log.warn("[KafkaController.ResponseEntity] : FAIL {}", msg);
-        return ResponseEntity.badRequest().body(Map.of("status","FAIL", "errorMsg", msg));
+        return ResponseEntity.badRequest().body(Map.of("status","FAIL","errorMsg",msg));
+    }
+    private ResponseEntity<Map<String,Object>> tooMany(String msg) {
+        return ResponseEntity.status(429).body(Map.of("status","FAIL","errorMsg",msg));
     }
 }

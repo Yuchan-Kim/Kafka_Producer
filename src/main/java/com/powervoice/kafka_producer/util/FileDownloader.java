@@ -2,79 +2,69 @@ package com.powervoice.kafka_producer.util;
 
 import com.jcraft.jsch.ChannelSftp;
 import com.jcraft.jsch.JSch;
-import com.jcraft.jsch.JSchException;
 import com.jcraft.jsch.Session;
-import com.jcraft.jsch.SftpException;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.net.ftp.FTP;
 import org.apache.commons.net.ftp.FTPClient;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class FileDownloader {
 
-    private static final String HOST = "192.168.0.85";
-    private static final String USER = "pvoice";
-    private static final String PASS = "skfodi$3312";
+    @Value("${file.remote.host}") private String host;
+    @Value("${file.remote.user}") private String user;
+    @Value("${file.remote.pass}") private String pass;
+    @Value("${file.remote.sftp:false}") private boolean useSftp;
 
     public byte[] download(String remotePath) {
-        boolean switchToSFTP = false;
         try {
-            if (switchToSFTP) {
-                return downloadViaSFTP(remotePath);
-            } else {
-                return downloadViaFTP(remotePath);
-            }
+            return useSftp ? downloadViaSFTP(remotePath) : downloadViaFTP(remotePath);
         } catch (Exception e) {
             log.error("Download failed: {}", remotePath, e);
             return null;
         }
     }
 
-    private byte[] downloadViaFTP(String path) throws IOException {
+    private byte[] downloadViaFTP(String path) throws Exception {
         FTPClient ftp = new FTPClient();
-
-        //FTP 접속 실패 예외 처리 추가
-        try{
-            ftp.connect(HOST);
-            ftp.login(USER, PASS);
+        try {
+            ftp.connect(host);
+            if (!ftp.login(user, pass)) throw new RuntimeException("FTP login failed");
             ftp.enterLocalPassiveMode();
             ftp.setFileType(FTP.BINARY_FILE_TYPE);
-        }catch (IOException e){
-            log.error("[FTP ERROR] 연결 실패: {}", e.getMessage(), e);
-            throw new RuntimeException("FTP 연결 실패");
-        }
 
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-            boolean ok = ftp.retrieveFile(path, baos);
-            return ok ? baos.toByteArray() : null;
+            try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+                boolean ok = ftp.retrieveFile(path, baos);
+                if (!ok) throw new RuntimeException("FTP retrieveFile false: " + path);
+                return baos.toByteArray();
+            }
         } finally {
-            ftp.logout();
-            ftp.disconnect();
+            try { ftp.logout(); } catch (Exception ignore) {}
+            try { ftp.disconnect(); } catch (Exception ignore) {}
         }
     }
 
-    private byte[] downloadViaSFTP(String path) throws JSchException, SftpException, IOException {
+    private byte[] downloadViaSFTP(String path) throws Exception {
         JSch jsch = new JSch();
-        Session session = jsch.getSession(USER, HOST, 22);
-        session.setPassword(PASS);
+        Session session = jsch.getSession(user, host, 22);
+        session.setPassword(pass);
         session.setConfig("StrictHostKeyChecking", "no");
         session.connect();
 
         ChannelSftp sftp = (ChannelSftp) session.openChannel("sftp");
         sftp.connect();
-
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
             sftp.get(path, baos);
             return baos.toByteArray();
         } finally {
-            sftp.disconnect();
-            session.disconnect();
+            try { sftp.disconnect(); } catch (Exception ignore) {}
+            try { session.disconnect(); } catch (Exception ignore) {}
         }
     }
 }
-

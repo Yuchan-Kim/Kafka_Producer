@@ -1,11 +1,14 @@
 package com.powervoice.kafka_producer.queue;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.powervoice.kafka_producer.dto.CallDataDTO;
+import com.powervoice.kafka_producer.dto.CallItem;
+import com.powervoice.kafka_producer.kafka.AudioProducer;
 import com.powervoice.kafka_producer.util.FileDownloader;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
@@ -15,42 +18,38 @@ import java.util.concurrent.*;
 @RequiredArgsConstructor
 @Slf4j
 public class QueueProcessor {
-
     private final MessageQ messageQ;
-    private final KafkaTemplate<String, String> kafkaTemplate;
-    private final ObjectMapper objectMapper = new ObjectMapper();
-    private final FileDownloader fileDownloader; // 추가
+    private final FileDownloader downloader;
+    private final AudioProducer producer;
 
-    private ExecutorService executorService;
+    @Value("${app.worker.threads:8}") private int threads;
+    private ExecutorService pool;
 
     @PostConstruct
     public void start() {
-        executorService = new ThreadPoolExecutor(
-                0, 50,
-                10L, TimeUnit.SECONDS,
-                new SynchronousQueue<>(),
-                new ThreadPoolExecutor.CallerRunsPolicy()
-        );
-
-        new Thread(() -> {
-            while (true) {
-                try {
-                    CallDataDTO data = messageQ.take();
-                    executorService.submit(() -> {
-                        try {
-                            byte[] audio = fileDownloader.download(data.getFilePath());
-                            data.setAudio(audio); // 오디오 데이터를 CallDataDTO에 설정
-                            String json = objectMapper.writeValueAsString(data);
-                            kafkaTemplate.send("reqdata", json);
-                            log.info("[Thread: executorService]: Sent to Kafka: {}", json);
-                        } catch (Exception e) {
-                            log.error("[Thread: executorService]: Kafka send error", e);
-                        }
-                    });
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-            }
-        }, "QueueDispatchThread").start();
+        pool = Executors.newFixedThreadPool(threads);
+        for (int i = 0; i < threads; i++) pool.submit(this::runLoop);
+        log.info("QueueProcessor started with {} threads", threads);
     }
+
+    private void runLoop() {
+        while (!Thread.currentThread().isInterrupted()) {
+            try {
+                CallItem item = messageQ.take();            // 큐에서 1건
+                byte[] audio = downloader.download(item.getFilePath());
+                if (audio == null || audio.length == 0) {
+                    log.warn("Skip (download fail/empty): CALL_ID={}, path={}", item.getCallId(), item.getFilePath());
+                    continue;
+                }
+                producer.send(item, audio);                 // 비동기 카프카 전송
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (Exception e) {
+                log.error("Worker error", e);
+            }
+        }
+    }
+
+    @PreDestroy
+    public void stop(){ if (pool != null) pool.shutdownNow(); }
 }
