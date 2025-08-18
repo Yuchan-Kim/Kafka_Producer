@@ -19,7 +19,7 @@ file:
     host: 192.168.0.85
     user: pvoice
     pass: "skfodi$3312"
-    sftp: false
+    sftp: true
 
 app:
   queue:

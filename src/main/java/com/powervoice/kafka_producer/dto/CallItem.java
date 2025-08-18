@@ -12,7 +12,7 @@ public class CallItem {
     @JsonProperty("EXT")         private String ext;          // OPTIONAL
     @JsonProperty("FILE_PATH")   private String filePath;     // REQUIRED
     @JsonProperty("START_TIME")  private String startTime;    // REQUIRED
-    @JsonProperty("END_SEC")     private String endSec;       // REQUIRED
+    @JsonProperty("END_TIME")     private String endTime;       // REQUIRED
     @JsonProperty("DURATION")    private String duration;     // REQUIRED
     @JsonProperty("REQ_TIME")    private String reqTime;      // REQUIRED
 }

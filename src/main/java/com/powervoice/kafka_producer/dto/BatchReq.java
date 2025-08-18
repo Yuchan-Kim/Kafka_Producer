@@ -1,3 +1,4 @@
+// src/main/java/com/powervoice/kafka_producer/dto/BatchReq.java
 package com.powervoice.kafka_producer.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -7,8 +8,12 @@ import java.util.List;
 
 @Data
 public class BatchReq {
-    private String CMD;                 // REQUIRED: BATCH_PROC | SINGLE_PROC
+    @JsonProperty("CMD")
+    private String CMD;                 // REQUIRED
+
+    @JsonProperty("TOTAL")
     private Integer TOTAL;              // REQUIRED: == CALL_ARR.size()
+
     @JsonProperty("CALL_ARR")
     private List<CallItem> callArr;     // REQUIRED (단일도 길이 1)
 }

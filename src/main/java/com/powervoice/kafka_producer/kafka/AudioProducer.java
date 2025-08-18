@@ -33,7 +33,7 @@ public class AudioProducer {
         add(record, "EXT", item.getExt());
         add(record, "FILE_PATH", item.getFilePath());
         add(record, "START_TIME", item.getStartTime());
-        add(record, "END_SEC", item.getEndSec());
+        add(record, "END_SEC", item.getEndTime());
         add(record, "DURATION", item.getDuration());
         add(record, "REQ_TIME", item.getReqTime());
 

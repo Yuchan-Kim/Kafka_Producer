@@ -83,7 +83,7 @@ public class KafkaController {
         if (empty(c.getCustmType()))return "CUSTM_TYPE required";
         if (empty(c.getFilePath())) return "FILE_PATH required";
         if (empty(c.getStartTime()))return "START_TIME required";
-        if (empty(c.getEndSec()))   return "END_SEC required";
+        if (empty(c.getEndTime()))   return "END_SEC required";
         if (empty(c.getDuration())) return "DURATION required";
         if (empty(c.getReqTime()))  return "REQ_TIME required";
         return null;
