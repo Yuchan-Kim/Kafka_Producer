@@ -6,24 +6,16 @@ spring:
     producer:
       bootstrap-servers: 192.168.0.64:9092
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.apache.kafka.common.serialization.ByteArraySerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
       acks: all
       retries: 5
       linger-ms: 10
       batch-size: 32768
       compression-type: lz4
       max-request-size: 10485760
-
-file:
-  remote:
-    host: 192.168.0.85
-    user: pvoice
-    pass: "skfodi$3312"
-    sftp: true
-
 app:
   queue:
-    capacity: 1000
+    capacity: 10000
     offer-timeout-ms: 200
   worker:
     threads: 8
