@@ -151,22 +151,70 @@ public class KafkaController {
     public ResponseEntity<Map<String, Object>> process(@RequestBody CallData data,
                                                        HttpServletRequest request) {
         try {
-            String clientIp = request.getRemoteAddr(); // ← 클라이언트 IP 추출
-            registry.register(data.getCallId(), clientIp); // ← callId와 함께 저장
+            // 1. 필수값 검증
+            if (data == null) {
+                return bad("Request body is null");
+            }
+            if (data.getCallId() == null || data.getCallId().isBlank()) {
+                return bad("Missing required field: callId");
+            }
+            if (data.getEmpNo() == null || data.getEmpNo().isBlank()) {
+                return bad("Missing required field: empNo");
+            }
 
-            boolean ok = messageQ.offer(data, offerTimeoutMs);
-            if (!ok) return tooMany("QUEUE_FULL");
 
-            log.info("✅ 등록: callId={}, empNo={}, ip={}, queueSize={}, remain={}",
-                    data.getCallId(), data.getEmpNo(), clientIp, messageQ.size(), messageQ.remainingCapacity());
+//            // 2. 클라이언트 IP 확인
+//            String clientIp = request.getRemoteAddr();
+//            if (clientIp == null || clientIp.isBlank()) {
+//                clientIp = "UNKNOWN";
+//            }
 
-            return ResponseEntity.ok(Map.of("status", "SUCCESS"));
+//            registry.register(data.getCallId(), clientIp);
+
+//            // 3. 큐 등록
+//            boolean ok;
+//            try {
+//                ok = messageQ.offer(data, offerTimeoutMs);
+//            } catch (InterruptedException ie) {
+//                Thread.currentThread().interrupt(); // 인터럽트 상태 복원
+//                return ResponseEntity.status(503).body(Map.of(
+//                        "status", "FAIL",
+//                        "errorMsg", "Queue interrupted while offering"
+//                ));
+//            }
+
+//            if (!ok) {
+//                return tooMany("QUEUE_FULL");
+//            }
+
+//            log.info("[KafkaController_process] : Queue에 등록 성공: callId={}, empNo={}, ip={}, queueSize={}, remain={}",
+//                    data.getCallId(), data.getEmpNo(), clientIp, messageQ.size(), messageQ.remainingCapacity());
+
+            log.info("[KafkaController_process] Recieved: callId={}, empNo={}, startTime={}, endTime={}",
+                    data.getCallId(), data.getEmpNo(), data.getStartTime(), data.getEndTime());
+
+            return ResponseEntity.ok(Map.of(
+                    "status", "SUCCESS",
+                    "callId", data.getCallId(),
+                    "empNo", data.getEmpNo(),
+                    "duration", data.getDuration(),
+                    "startTime", data.getStartTime(),
+                    "endTime", data.getEndTime()
+            ));
+
+        } catch (IllegalArgumentException e) {
+            log.warn("[KafkaController_process] 잘못된 인자: {}", e.getMessage());
+            return bad("Invalid argument: " + e.getMessage());
 
         } catch (Exception e) {
-            log.error("❌ Invalid request", e);
-            return bad("Invalid request: " + e.getMessage());
+            log.error("[KafkaController_process] 처리 중 알 수 없는 오류 발생", e);
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "status", "FAIL",
+                    "errorMsg", "Unexpected error: " + e.getMessage()
+            ));
         }
     }
+
 
     private ResponseEntity<Map<String, Object>> bad(String msg) {
         return ResponseEntity.badRequest().body(Map.of("status", "FAIL", "errorMsg", msg));

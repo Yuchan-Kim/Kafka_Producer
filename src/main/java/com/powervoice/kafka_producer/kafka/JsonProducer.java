@@ -19,12 +19,12 @@ import java.nio.charset.StandardCharsets;
 public class JsonProducer {
 
 
-    private static final String TOPIC = "reqdata";
+    private static final String TOPIC = "Reqdata";
     private final KafkaTemplate<String, String> kafkaTemplate;
 
 
     public void sendSingle(String key, String rawJson) {
-        ProducerRecord<String, String> r = new ProducerRecord<>(TOPIC, key, rawJson);
+        ProducerRecord<String, String> r = new ProducerRecord<>(TOPIC,rawJson);
         r.headers().add("content-type", "application/json".getBytes(StandardCharsets.UTF_8));
 
 
