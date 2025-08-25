@@ -61,25 +61,20 @@ public class MessageQ {
 
     public MessageQ(@Value("${app.queue.capacity:10000}") int cap) {
         this.q = new LinkedBlockingQueue<>(cap);
-        System.out.println("✅ MessageQ 생성됨 (capacity=" + cap + ")");
+        System.out.println("[MessageQ] MessageQ 생성됨 (capacity=" + cap + ")");
     }
-
-
 
     public boolean offer(CallData x, long timeoutMs) throws InterruptedException {
         return q.offer(x, timeoutMs, TimeUnit.MILLISECONDS);
     }
 
-
     public CallData take() throws InterruptedException {
         return q.take();
     }
 
-
     public int size() {
         return q.size();
     }
-
 
     public int remainingCapacity() {
         return q.remainingCapacity();

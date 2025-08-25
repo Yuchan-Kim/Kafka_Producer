@@ -99,24 +99,25 @@ public class QueueProcessor {
     }
 
     private void runLoop() {
-        log.info("▶️ runLoop 진입 - Thread={}", Thread.currentThread().getName());
+        log.info("[QueueProcessor_runloop] runLoop 진입 - Thread={}", Thread.currentThread().getName());
         while (!Thread.currentThread().isInterrupted()) {
             try {
-                log.info("🟡 waiting on messageQ.take()");
+                log.info("[QueueProcessor_runloop] TAKE 시도 - Thread={}", Thread.currentThread().getName());
                 CallData item = messageQ.take();
-                log.info("🟢 TAKE 완료 - callId={}", item.getCallId());
+                log.info("[QueueProcessor_runloop] TAKE 완료 - callId={}", item.getCallId());
 
                 String key = item.getCallId();
                 String json = new ObjectMapper().writeValueAsString(item);  // 또는 별도 유틸
 
-                log.info("📤 Kafka 전송 시작: callId={}", key);
-                jsonProducer.sendSingle(key, json);  // ✅ 전송
-                log.info("📬 Kafka 전송 완료: callId={}", key);
+                log.info("[QueueProcessor_runloop] Kafka 전송 시작: callId={}", key);
+                jsonProducer.sendSingle(key, json);  // 전송
+                log.info("[QueueProcessor_runloop] Kafka 전송 완료: callId={}", key);
 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
+                log.warn("[QueueProcessor_runloop] Thread 인터럽트 감지, 종료 시도");
             } catch (Exception e) {
-                log.error("Worker error", e);
+                log.error("[QueueProcessor_runloop] Thread 에러", e);
             }
         }
     }

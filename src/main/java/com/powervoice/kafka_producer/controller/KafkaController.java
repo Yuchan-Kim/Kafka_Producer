@@ -147,50 +147,86 @@ public class KafkaController {
     @Value("${app.queue.offer-timeout-ms:200}")
     private long offerTimeoutMs;
 
+    @Value("${app.debug.auto_rep}")
+    private boolean autoRep;
+
     @PostMapping
-    public ResponseEntity<Map<String, Object>> process(@RequestBody CallData data,
-                                                       HttpServletRequest request) {
+    public ResponseEntity<Map<String, Object>> process(@RequestBody CallData data, HttpServletRequest request) {
         try {
             // 1. 필수값 검증
             if (data == null) {
-                return bad("Request body is null");
+                return bad("[KafkaController_process] 수신할 데이터가 없습니다.");
             }
             if (data.getCallId() == null || data.getCallId().isBlank()) {
-                return bad("Missing required field: callId");
+                return bad("[KafkaController_process] callId가 없습니다.");
             }
             if (data.getEmpNo() == null || data.getEmpNo().isBlank()) {
-                return bad("Missing required field: empNo");
+                return bad("[KafkaController_process] empNo가 없습니다.");
+            }
+            if (data.getPhoneNum() == null || data.getPhoneNum().isBlank()) {
+                return bad("[KafkaController_process] phoneNum이 없습니다.");
+            }
+            if (data.getFilePath() == null || data.getFilePath().isBlank()) {
+                return bad("[KafkaController_process] filePath가 없습니다.");
+            }
+            if (data.getStartTime() == null || data.getStartTime().isBlank()) {
+                return bad("[KafkaController_process] startTime이 없습니다.");
+            }
+            if (data.getEndTime() == null || data.getEndTime().isBlank()) {
+                return bad("[KafkaController_process] endTime이 없습니다.");
+            }
+            if (data.getDuration() == null || data.getDuration().isBlank()) {
+                return bad("[KafkaController_process] duration이 없습니다.");
+            }
+            if (data.getDuration().equals("0") || data.getDuration().equals("0.0")) {
+                return bad("[KafkaController_process] duration이 0입니다.");
             }
 
 
-//            // 2. 클라이언트 IP 확인
-//            String clientIp = request.getRemoteAddr();
-//            if (clientIp == null || clientIp.isBlank()) {
-//                clientIp = "UNKNOWN";
-//            }
 
-//            registry.register(data.getCallId(), clientIp);
+            // 2. IP 등록
+            //autoRep이 true인 경우에만 수신된 ip 등록
+            if (autoRep) {
+                String clientIp = request.getRemoteAddr();  // 클라이언트 IP
 
-//            // 3. 큐 등록
-//            boolean ok;
-//            try {
-//                ok = messageQ.offer(data, offerTimeoutMs);
-//            } catch (InterruptedException ie) {
-//                Thread.currentThread().interrupt(); // 인터럽트 상태 복원
-//                return ResponseEntity.status(503).body(Map.of(
-//                        "status", "FAIL",
-//                        "errorMsg", "Queue interrupted while offering"
-//                ));
-//            }
+                // 요청이 도착한 전체 주소로부터 포트 추론 (ex: Host: 192.168.0.183:9382)
+                String hostHeader = request.getHeader("Host");
+                String clientPort = "80"; // 기본값
 
-//            if (!ok) {
-//                return tooMany("QUEUE_FULL");
-//            }
+                if (hostHeader != null && hostHeader.contains(":")) {
+                    clientPort = hostHeader.split(":")[1];
+                }
 
-//            log.info("[KafkaController_process] : Queue에 등록 성공: callId={}, empNo={}, ip={}, queueSize={}, remain={}",
-//                    data.getCallId(), data.getEmpNo(), clientIp, messageQ.size(), messageQ.remainingCapacity());
+                String clientAddr = clientIp + ":" + clientPort;
 
-            log.info("[KafkaController_process] Recieved: callId={}, empNo={}, startTime={}, endTime={}",
+                // callId → clientAddr 매핑 등록
+                registry.register(data.getCallId(), clientAddr);
+                log.info("[KafkaController_process] 해당 callid: {}에 ip 등록 완료: {}", data.getCallId(), clientAddr);
+            }
+
+
+
+            // 3. 큐 등록
+            boolean ok;
+            try {
+                ok = messageQ.offer(data, offerTimeoutMs);
+                log.info("[KafkaController_process] : Queue에 등록 성공: callId={}, empNo={}, queueSize={}, remain={}",
+                        data.getCallId(), data.getEmpNo(), messageQ.size(), messageQ.remainingCapacity());
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt(); // 인터럽트 상태 복원
+                return ResponseEntity.status(503).body(Map.of(
+                        "status", "FAIL",
+                        "errorMsg", "[KafkaController_process]: Queue 등록 중 인터럽트 발생"
+                ));
+            }
+
+            // 큐가 가득 찬 경우
+            if (!ok) {
+                return tooMany("[KafkaController_process]: 큐가 가득참");
+            }
+
+
+            log.info("[KafkaController_process] 수신한 데이터: callId={}, empNo={}, startTime={}, endTime={}",
                     data.getCallId(), data.getEmpNo(), data.getStartTime(), data.getEndTime());
 
             return ResponseEntity.ok(Map.of(
@@ -215,11 +251,12 @@ public class KafkaController {
         }
     }
 
-
+    // 응답 헬퍼
     private ResponseEntity<Map<String, Object>> bad(String msg) {
         return ResponseEntity.badRequest().body(Map.of("status", "FAIL", "errorMsg", msg));
     }
 
+    // 429 Too Many Requests
     private ResponseEntity<Map<String, Object>> tooMany(String msg) {
         return ResponseEntity.status(429).body(Map.of("status", "FAIL", "errorMsg", msg));
     }

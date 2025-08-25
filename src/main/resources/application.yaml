@@ -11,19 +11,19 @@ spring:
       retries: 5
       linger-ms: 10
       compression-type: lz4
-#    consumer:
-#      bootstrap-servers: 192.168.0.64:9092
-#      group-id: your-consumer-group-id   # 필수, 고유한 그룹 ID
-#      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-#      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-#      auto-offset-reset: latest          # earliest or latest
+    consumer:
+      bootstrap-servers: 192.168.0.64:9092
+      group-id: log-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: latest
 app:
   queue:
     capacity: 10000
     offer-timeout-ms: 200
   worker:
     threads: 8
-  target-ip: 192.168.10.183
-  target-port: 9382
+  target_add: 192.168.10.183:9382
   debug:
     enabled: true
+    auto_rep: false # false ==> target ip사용, true ==> 수신된(req툐청) 아이피로 응답
